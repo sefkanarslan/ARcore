@@ -16,6 +16,9 @@ namespace ArBlokEvren.UI
         private ThemeManager _themes;
         private VoxelWorld _world;
 
+        private bool _demo;
+        private System.Action _regenerate;
+
         private Text _statusText;
         private Text _themeLabel;
         private Text _scanLabel;
@@ -32,6 +35,15 @@ namespace ArBlokEvren.UI
             _themes = themes;
             _world = world;
             Build();
+            Refresh();
+        }
+
+        /// <summary>Switches the UI to non-AR sandbox labels; the scan button
+        /// regenerates the demo world instead of toggling scanning.</summary>
+        public void ConfigureDemo(System.Action regenerate)
+        {
+            _demo = true;
+            _regenerate = regenerate;
             Refresh();
         }
 
@@ -118,7 +130,15 @@ namespace ArBlokEvren.UI
 
         private void OnScanClicked()
         {
-            _state.Scanning = !_state.Scanning;
+            if (_demo)
+            {
+                _regenerate?.Invoke();
+            }
+            else
+            {
+                _state.Scanning = !_state.Scanning;
+            }
+
             Refresh();
         }
 
@@ -155,7 +175,9 @@ namespace ArBlokEvren.UI
 
             if (_scanLabel != null)
             {
-                _scanLabel.text = _state.Scanning ? "Tara: Acik" : "Tara: Kapali";
+                _scanLabel.text = _demo
+                    ? "Yeni Dunya"
+                    : (_state.Scanning ? "Tara: Acik" : "Tara: Kapali");
             }
 
             if (_modeLabel != null)
@@ -170,9 +192,16 @@ namespace ArBlokEvren.UI
 
             if (_statusText != null)
             {
-                _statusText.text = _state.Scanning
-                    ? "Cevre taraniyor... telefonu yavasca gezdir"
-                    : "Tara'ya bas ve cevreyi tara";
+                if (_demo)
+                {
+                    _statusText.text = "Demo modu: iki parmakla dondur, dokunarak blok koy/kir";
+                }
+                else
+                {
+                    _statusText.text = _state.Scanning
+                        ? "Cevre taraniyor... telefonu yavasca gezdir"
+                        : "Tara'ya bas ve cevreyi tara";
+                }
             }
         }
 
