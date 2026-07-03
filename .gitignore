@@ -1,5 +1,7 @@
 # Unity generated folders
 /[Ll]ibrary/
+/build/
+build.log
 /[Tt]emp/
 /[Oo]bj/
 /[Bb]uild/
