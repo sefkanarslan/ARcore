@@ -30,6 +30,28 @@ namespace ArSpacePlanner.Measure
 
         public bool Active { get; set; }
 
+        public int PointCount => _points.Count;
+        public bool AreaClosed => _areaClosed;
+
+        /// <summary>Total measured length along the current chain, metres.</summary>
+        public float TotalLength => Geometry.PolylineLength(Positions());
+
+        /// <summary>Enclosed area once the chain is closed into a polygon, m\u00B2 (else 0).</summary>
+        public float Area => _areaClosed ? Geometry.PolygonArea(Positions()) : 0f;
+
+        private List<Vector3> Positions()
+        {
+            var positions = new List<Vector3>(_points.Count);
+            foreach (Transform t in _points)
+            {
+                if (t != null)
+                {
+                    positions.Add(t.position);
+                }
+            }
+            return positions;
+        }
+
         public void Init(ARRaycastManager raycastManager, Camera camera, AppState state)
         {
             _raycastManager = raycastManager;

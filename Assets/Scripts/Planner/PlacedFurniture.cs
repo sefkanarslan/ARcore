@@ -1,12 +1,14 @@
+using System.Collections.Generic;
 using ArSpacePlanner.Util;
 using UnityEngine;
 
 namespace ArSpacePlanner.Planner
 {
     /// <summary>
-    /// A furniture instance placed in the scene. The root sits on the floor plane; a
-    /// child box mesh, sized to the definition, is offset up so the item rests on the
-    /// ground. Handles selection/overlap highlighting and box-overlap testing.
+    /// A furniture instance placed in the scene. Its mesh is assembled from several
+    /// boxes (see <see cref="FurnitureMeshBuilder"/>) with lit materials for real
+    /// shading. A single bounds collider is used for picking and overlap tests; a
+    /// yellow wireframe marks selection and a red overlay marks collisions.
     /// </summary>
     public sealed class PlacedFurniture : MonoBehaviour
     {
@@ -14,14 +16,17 @@ namespace ArSpacePlanner.Planner
         private const float MaxScale = 2.0f;
 
         private FurnitureDefinition _definition;
-        private Transform _box;
-        private MeshRenderer _renderer;
-        private Material _material;
+        private Vector3 _boundsCenter;
+        private Vector3 _boundsSize;
+
+        private BoxCollider _collider;
+        private GameObject _selectionBox;
+        private Renderer _overlapBox;
 
         private float _scaleFactor = 1f;
-        private bool _selected;
 
         public string DefinitionId => _definition != null ? _definition.Id : null;
+        public MountType Mount => _definition != null ? _definition.Mount : MountType.Floor;
         public float RotationY => transform.eulerAngles.y;
         public float ScaleFactor => _scaleFactor;
 
@@ -29,16 +34,63 @@ namespace ArSpacePlanner.Planner
         {
             _definition = definition;
 
-            var boxGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            boxGo.name = "Volume";
-            _box = boxGo.transform;
-            _box.SetParent(transform, false);
+            if (definition.Mount == MountType.Wall)
+            {
+                _boundsCenter = new Vector3(0f, 0f, definition.Size.z * 0.5f);
+            }
+            else
+            {
+                _boundsCenter = new Vector3(0f, definition.Size.y * 0.5f, 0f);
+            }
+            _boundsSize = definition.Size;
 
-            _renderer = boxGo.GetComponent<MeshRenderer>();
-            _material = MaterialFactory.Transparent(WithAlpha(definition.Color, 0.6f));
-            _renderer.sharedMaterial = _material;
+            BuildParts(definition);
+            BuildBoundsCollider();
+            BuildSelectionBox();
+            BuildOverlapBox();
 
-            ApplyTransform();
+            ApplyScale();
+        }
+
+        private void BuildParts(FurnitureDefinition definition)
+        {
+            List<FurniturePart> parts = FurnitureMeshBuilder.Build(definition);
+            foreach (FurniturePart part in parts)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = "Part";
+                Destroy(go.GetComponent<Collider>());
+                go.transform.SetParent(transform, false);
+                go.transform.localPosition = part.Center;
+                go.transform.localScale = part.Size;
+                go.GetComponent<MeshRenderer>().sharedMaterial = MaterialFactory.Lit(part.Color);
+            }
+        }
+
+        private void BuildBoundsCollider()
+        {
+            _collider = gameObject.AddComponent<BoxCollider>();
+            _collider.center = _boundsCenter;
+            _collider.size = _boundsSize;
+        }
+
+        private void BuildSelectionBox()
+        {
+            _selectionBox = WireBox.Create(transform, _boundsCenter, _boundsSize, new Color(1f, 0.85f, 0.2f));
+            _selectionBox.SetActive(false);
+        }
+
+        private void BuildOverlapBox()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = "OverlapOverlay";
+            Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = _boundsCenter;
+            go.transform.localScale = _boundsSize * 1.02f;
+            _overlapBox = go.GetComponent<MeshRenderer>();
+            _overlapBox.sharedMaterial = MaterialFactory.Transparent(new Color(1f, 0.15f, 0.15f, 0.35f));
+            _overlapBox.enabled = false;
         }
 
         public void SetRotationY(float degrees)
@@ -51,10 +103,15 @@ namespace ArSpacePlanner.Planner
             transform.Rotate(Vector3.up, deltaDegrees, Space.World);
         }
 
+        public void SetRotation(Quaternion rotation)
+        {
+            transform.rotation = rotation;
+        }
+
         public void SetScale(float factor)
         {
             _scaleFactor = Mathf.Clamp(factor, MinScale, MaxScale);
-            ApplyTransform();
+            ApplyScale();
         }
 
         public void MultiplyScale(float multiplier)
@@ -64,16 +121,18 @@ namespace ArSpacePlanner.Planner
 
         public void SetSelected(bool selected)
         {
-            _selected = selected;
-            RefreshColor();
+            if (_selectionBox != null)
+            {
+                _selectionBox.SetActive(selected);
+            }
         }
 
         /// <summary>True if this item's volume overlaps any other placed furniture.</summary>
         public bool Overlaps()
         {
-            Vector3 halfExtents = (_definition.Size * _scaleFactor) * 0.5f;
-            Vector3 center = transform.position + transform.up * halfExtents.y;
-            Collider[] hits = Physics.OverlapBox(center, halfExtents * 0.98f, transform.rotation);
+            Vector3 halfExtents = (_boundsSize * _scaleFactor) * 0.5f;
+            Vector3 center = transform.TransformPoint(_boundsCenter);
+            Collider[] hits = Physics.OverlapBox(center, halfExtents * 0.95f, transform.rotation);
 
             foreach (Collider hit in hits)
             {
@@ -88,32 +147,15 @@ namespace ArSpacePlanner.Planner
 
         public void RefreshColor()
         {
-            if (_material == null)
+            if (_overlapBox != null)
             {
-                return;
+                _overlapBox.enabled = Overlaps();
             }
-
-            Color baseColor = _definition.Color;
-            if (Overlaps())
-            {
-                baseColor = Color.Lerp(baseColor, Color.red, 0.6f);
-            }
-
-            float alpha = _selected ? 0.85f : 0.55f;
-            _material.color = WithAlpha(baseColor, alpha);
         }
 
-        private void ApplyTransform()
+        private void ApplyScale()
         {
-            Vector3 size = _definition.Size * _scaleFactor;
-            _box.localScale = size;
-            _box.localPosition = new Vector3(0f, size.y * 0.5f, 0f);
-        }
-
-        private static Color WithAlpha(Color color, float alpha)
-        {
-            color.a = alpha;
-            return color;
+            transform.localScale = Vector3.one * _scaleFactor;
         }
     }
 }

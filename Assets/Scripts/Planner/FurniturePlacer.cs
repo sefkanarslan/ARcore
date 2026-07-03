@@ -39,6 +39,8 @@ namespace ArSpacePlanner.Planner
 
         public int SelectedCatalogIndex { get; private set; }
 
+        public IReadOnlyList<PlacedFurniture> Placed => _placed;
+
         public void Init(ARRaycastManager raycastManager, Camera camera, AppState state)
         {
             _raycastManager = raycastManager;
@@ -169,7 +171,16 @@ namespace ArSpacePlanner.Planner
 
             if (TryRaycastToWorld(screenPos, out Pose pose))
             {
-                _dragging.transform.position = pose.position;
+                bool vertical = IsVertical(pose);
+                if (_dragging.Mount == MountType.Wall && vertical)
+                {
+                    _dragging.transform.position = pose.position;
+                    _dragging.SetRotation(Quaternion.LookRotation(pose.up, Vector3.up));
+                }
+                else if (_dragging.Mount == MountType.Floor && !vertical)
+                {
+                    _dragging.transform.position = pose.position;
+                }
                 _dragging.RefreshColor();
             }
         }
@@ -188,7 +199,7 @@ namespace ArSpacePlanner.Planner
             // Tap on empty space -> place a new item.
             if (TryRaycastToWorld(screenPos, out Pose pose))
             {
-                Place(pose.position);
+                PlaceAt(pose);
             }
             else
             {
@@ -232,19 +243,40 @@ namespace ArSpacePlanner.Planner
 
         // ---- placement / selection helpers ------------------------------------
 
-        public PlacedFurniture Place(Vector3 position)
+        public PlacedFurniture PlaceAt(Pose pose)
         {
             FurnitureDefinition def = FurnitureCatalog.Items[SelectedCatalogIndex];
-            return Spawn(def, position, 0f, 1f, select: true);
+            bool vertical = IsVertical(pose);
+
+            if (def.Mount == MountType.Wall && !vertical)
+            {
+                _state.SetStatus($"{def.DisplayName} duvara as\u0131l\u0131r \u2014 dikey bir y\u00fczeye dokun.");
+                return null;
+            }
+            if (def.Mount == MountType.Floor && vertical)
+            {
+                _state.SetStatus($"{def.DisplayName} zemine konur \u2014 yatay bir y\u00fczeye dokun.");
+                return null;
+            }
+
+            Quaternion rotation = def.Mount == MountType.Wall
+                ? Quaternion.LookRotation(pose.up, Vector3.up)
+                : Quaternion.identity;
+            return Spawn(def, pose.position, rotation, 1f, select: true);
         }
 
-        private PlacedFurniture Spawn(FurnitureDefinition def, Vector3 position, float rotationY, float scale, bool select)
+        private static bool IsVertical(Pose pose)
+        {
+            return Mathf.Abs(Vector3.Dot(pose.up, Vector3.up)) < 0.5f;
+        }
+
+        private PlacedFurniture Spawn(FurnitureDefinition def, Vector3 position, Quaternion rotation, float scale, bool select)
         {
             var go = new GameObject("Furniture_" + def.Id);
             go.transform.position = position;
             var item = go.AddComponent<PlacedFurniture>();
             item.Init(def);
-            item.SetRotationY(rotationY);
+            item.SetRotation(rotation);
             item.SetScale(scale);
             go.SetActive(Active || !select);
 
@@ -404,7 +436,7 @@ namespace ArSpacePlanner.Planner
                 {
                     continue;
                 }
-                Spawn(def, entry.position, entry.rotationY, entry.scale, select: false);
+                Spawn(def, entry.position, Quaternion.Euler(0f, entry.rotationY, 0f), entry.scale, select: false);
             }
 
             RefreshAllColors();

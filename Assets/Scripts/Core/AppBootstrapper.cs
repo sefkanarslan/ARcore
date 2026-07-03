@@ -44,6 +44,8 @@ namespace ArSpacePlanner.Core
 
             planeManager.requestedDetectionMode = PlaneDetectionMode.Horizontal | PlaneDetectionMode.Vertical;
 
+            BuildLighting();
+
             _measure = gameObject.AddComponent<MeasurementManager>();
             _measure.Init(raycastManager, arCamera, _state);
 
@@ -53,10 +55,28 @@ namespace ArSpacePlanner.Core
 
             var screenshots = gameObject.AddComponent<ScreenshotService>();
 
+            var report = gameObject.AddComponent<ReportExporter>();
+            report.Init(_state, _measure, _planner);
+
             _ui = gameObject.AddComponent<AppUI>();
-            _ui.Init(_state, _measure, _planner, screenshots);
+            _ui.Init(_state, _measure, _planner, screenshots, report);
 
             _state.Mode = AppMode.Measure;
+        }
+
+        private void BuildLighting()
+        {
+            var lightGo = new GameObject("Directional Light");
+            lightGo.transform.SetParent(transform, false);
+            lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+
+            var light = lightGo.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1.1f;
+            light.color = Color.white;
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.55f, 0.55f, 0.6f);
         }
 
         private void BuildSession()

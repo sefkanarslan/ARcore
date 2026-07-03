@@ -25,17 +25,27 @@ Uygulamanın iki modu var; sağ/sol üstteki butonlarla geçiş yaparsın.
 5. **Birim**: m / cm / ft / inç arasında anında geçiş (`Units`).
 
 ### 2) Plan modu
-1. **Katalogdan seç**: Masa, sandalye, koltuk, yatak, dolap, çalışma masası — hepsi
-   gerçek ölçülerde (`FurnitureCatalog`).
-2. **Yerleştir**: Zemine dokun → eşya oraya konur.
+1. **Katalogdan seç**: Gerçek ölçülerde eşyalar (`FurnitureCatalog`). Her eşya tek bir
+   kutu değil, birkaç kutudan oluşan **tanınabilir bir mesh**tir (masa = tabla + 4 ayak,
+   koltuk = taban + sırt + kol, yatak = kasa + şilte + yastık…) ve sahnedeki yönlü
+   ışıkla gölgelenir (`FurnitureMeshBuilder`).
+   - **Zemin eşyaları**: masa, sandalye, koltuk, yatak, dolap, çalışma masası.
+   - **Duvar eşyaları**: TV, tablo, raf — **dikey** düzleme asılır, otomatik olarak
+     duvara dik hizalanır (`MountType.Wall`).
+2. **Yerleştir**: Doğru yüzeye dokun (zemin eşyası yatay, duvar eşyası dikey düzlem).
 3. **Düzenle**:
-   - Tek parmak sürükle → **taşı** (zemin boyunca).
+   - Tek parmak sürükle → **taşı** (uygun yüzey boyunca).
    - İki parmak → **döndür + ölçekle** (pinch/twist).
+   - Seçili eşya sarı tel kafesle, çakışan eşyalar kırmızıyla işaretlenir.
 4. **Çakışma uyarısı**: İki eşya üst üste binince **kırmızı** vurgulanır
    (`Physics.OverlapBox`).
 5. **Kaydet / Yükle**: Yerleşim JSON olarak diske yazılır (`LayoutStore`,
    `Application.persistentDataPath/layout.json`).
 6. **Foto**: Mevcut AR görünümü PNG olarak dışa aktarılır (`ScreenshotService`).
+7. **Rapor**: Ölçümleri + eşya listesini içeren bir özet kartı AR görünümüne bindirilip
+   PNG olarak yakalanır ve **Android paylaşım** sayfası açılır (`ReportExporter`,
+   `ReportBuilder`, `NativeShare`). Paylaşımda özet metni her zaman gider; görselin
+   eklenmesi için uygulamanın `FileProvider`'ı gerekir (yoksa metin paylaşımına düşer).
 
 ### Mimari (kod)
 
@@ -46,20 +56,25 @@ elle düzenlenen bir sahne grafiği yoktur.
 ```
 Assets/Scripts/
   Core/     GameBootstrap      (uygulamayı başlatır)
-            AppBootstrapper    (AR rig'i + sistemleri koddan kurar)
+            AppBootstrapper    (AR rig'i + ışık + sistemleri koddan kurar)
             AppState, AppMode  (paylaşılan durum + olaylar)
   Input/    InputRouter        (dokunma/fare soyutlaması, EnhancedTouch)
-  Measure/  MeasurementManager (dokunma -> nokta -> uzunluk/alan)
+  Measure/  MeasurementManager (dokunma -> nokta -> uzunluk/alan + özet erişimi)
             MeasureSegment     (çizgi + 3B mesafe etiketi)
             Units, MeasureUnit (birim dönüşümü)
-  Planner/  FurniturePlacer    (yerleştir/seç/taşı/döndür/ölçekle, çakışma)
-            PlacedFurniture    (eşya örneği + hacim + vurgu)
-            FurnitureCatalog, FurnitureDefinition
+  Planner/  FurniturePlacer    (yerleştir/seç/taşı/döndür/ölçekle, zemin+duvar, çakışma)
+            PlacedFurniture    (kompozit mesh + hacim + seçim/çakışma vurgusu)
+            FurnitureMeshBuilder (kutulardan tanınabilir mobilya üretir)
+            FurnitureCatalog, FurnitureDefinition, FurnitureKind (kind + MountType)
             LayoutStore, LayoutData (JSON kaydet/yükle)
+            ReportBuilder      (özet metni)
   UI/       AppUI, UIFactory   (tüm arayüz koddan)
+            ReportExporter     (özet kartı + ekran yakalama + paylaşım)
   Util/     Geometry           (poli-çizgi uzunluğu, poligon alanı/çevresi)
-            MaterialFactory    (çalışma anında materyal)
+            MaterialFactory    (çalışma anında lit/unlit/transparent materyal)
+            WireBox            (seçim tel kafesi)
             ScreenshotService  (PNG dışa aktarma)
+            NativeShare        (Android paylaşım)
 ```
 
 Projede hiçbir üçüncü parti / telifli görsel veya 3B model yoktur; tüm meshler ve

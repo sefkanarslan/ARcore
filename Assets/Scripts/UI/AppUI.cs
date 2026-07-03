@@ -23,6 +23,7 @@ namespace ArSpacePlanner.UI
         private MeasurementManager _measure;
         private FurniturePlacer _planner;
         private ScreenshotService _screenshots;
+        private ReportExporter _report;
 
         private Text _statusText;
         private Text _modeButtonLabel;
@@ -30,12 +31,14 @@ namespace ArSpacePlanner.UI
         private RectTransform _measureBar;
         private RectTransform _planBar;
 
-        public void Init(AppState state, MeasurementManager measure, FurniturePlacer planner, ScreenshotService screenshots)
+        public void Init(AppState state, MeasurementManager measure, FurniturePlacer planner,
+            ScreenshotService screenshots, ReportExporter report)
         {
             _state = state;
             _measure = measure;
             _planner = planner;
             _screenshots = screenshots;
+            _report = report;
 
             EnsureEventSystem();
             Transform canvas = BuildCanvas();
@@ -137,7 +140,8 @@ namespace ArSpacePlanner.UI
             UIFactory.CreateButton(actionRow.transform, "Kaydet", ButtonColor, () => _planner.Save(), out _);
             UIFactory.CreateButton(actionRow.transform, "Y\u00fckle", ButtonColor, () => _planner.Load(), out _);
             UIFactory.CreateButton(actionRow.transform, "Temizle", ButtonColor, () => _planner.ClearAll(), out _);
-            UIFactory.CreateButton(actionRow.transform, "Foto", AccentColor, CaptureScreenshot, out _);
+            UIFactory.CreateButton(actionRow.transform, "Foto", ButtonColor, CaptureScreenshot, out _);
+            UIFactory.CreateButton(actionRow.transform, "Rapor", AccentColor, ExportReport, out _);
         }
 
         private RectTransform CreateBottomBar(Transform canvas, string name, float height = 150f)
@@ -188,6 +192,14 @@ namespace ArSpacePlanner.UI
                 return;
             }
             _screenshots.Capture(path => _state.SetStatus("Foto kaydedildi: " + System.IO.Path.GetFileName(path)));
+        }
+
+        private void ExportReport()
+        {
+            if (_report != null)
+            {
+                _report.ExportAndShare();
+            }
         }
 
         private void OnModeChanged(AppMode mode)
